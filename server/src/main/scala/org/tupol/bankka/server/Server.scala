@@ -1,13 +1,14 @@
-package org.tupol.takkagotchi.server
+package org.tupol.bankka.server
 
 import scala.util.{ Failure, Success }
 
 object Server {
-  import akka.actor.typed.ActorSystem
   import akka.actor.CoordinatedShutdown
-  import akka.{ Done, actor => classic }
+  import akka.actor.typed.ActorSystem
   import akka.http.scaladsl.Http
   import akka.http.scaladsl.server.Route
+  import akka.{ Done, actor => classic }
+
   import scala.concurrent.duration._
 
   /**

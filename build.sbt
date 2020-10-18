@@ -2,7 +2,7 @@ import Dependencies._
 
 lazy val commonSettings = Seq(
   organization := "org.tupol",
-  name := "takkagotchi",
+  name := "bankka",
   scalaVersion := Versions.scala,
   scalacOptions ++= Seq(
     "-feature",
@@ -15,7 +15,7 @@ lazy val commonSettings = Seq(
 lazy val server = (project in file("server"))
   .settings(commonSettings: _*)
   .settings(
-    name := "takkagotchi-server",
+    name := "bankka-server",
     version := "0.0.1",
     libraryDependencies ++= ServerCoreDependencies,
     libraryDependencies ++= ServerTestDependencies,
@@ -24,11 +24,11 @@ lazy val server = (project in file("server"))
 lazy val client = (project in file("client"))
   .settings(commonSettings: _*)
   .settings(
-    name := "takkagotchi-client"
+    name := "bankka-client"
   )
 
 lazy val root = (project in file("."))
   .settings(commonSettings: _*)
   .aggregate(client)
   .aggregate(server)
-  .settings(name := "takkagotchi")
+  .settings(name := "bankka")

@@ -1,4 +1,4 @@
-package org.tupol.takkagotchi.commons
+package org.tupol.bankka.commons
 
 trait SerializableMessage
 trait CborSerializable
