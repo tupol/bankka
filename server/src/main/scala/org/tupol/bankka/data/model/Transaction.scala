@@ -3,7 +3,9 @@ package org.tupol.bankka.data.model
 import java.time.Instant
 import java.util.UUID
 
-import scala.concurrent.{ ExecutionContext, Future }
+import com.fasterxml.jackson.annotation.{JsonSubTypes, JsonTypeInfo}
+
+import scala.concurrent.{ExecutionContext, Future}
 
 case class TransactionId(value: UUID = UUID.randomUUID()) {
   override def toString: String = value.toString
@@ -11,6 +13,13 @@ case class TransactionId(value: UUID = UUID.randomUUID()) {
 
 case class RejectionInfo(reason: String, rejectedAt: Instant = Instant.now())
 
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
+@JsonSubTypes(
+  Array(
+    new JsonSubTypes.Type(value = classOf[StartTransaction], name = "StartTransaction"),
+    new JsonSubTypes.Type(value = classOf[CompletedTransaction], name = "CompletedTransaction"),
+    new JsonSubTypes.Type(value = classOf[RefundedTransaction], name = "RefundedTransaction"),
+    new JsonSubTypes.Type(value = classOf[RejectedTransaction], name = "RejectedTransaction")))
 sealed trait Transaction {
   def id: TransactionId
   def from: AccountId

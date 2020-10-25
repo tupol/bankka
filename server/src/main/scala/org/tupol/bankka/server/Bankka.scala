@@ -1,11 +1,11 @@
 package org.tupol.bankka.server
 
 import akka.actor.AddressFromURIString
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorSystem, Behavior, DispatcherSelector}
 import com.typesafe.config.{Config, ConfigFactory}
 import org.slf4j.LoggerFactory
-import org.tupol.bankka.data.dao.{BankDao, InMemoryAccountDao, InMemoryClientDao, InMemoryTransactionDao}
+import org.tupol.bankka.data.dao.BankDao
 
 import scala.concurrent.ExecutionContextExecutor
 import scala.jdk.CollectionConverters._
@@ -45,7 +45,7 @@ object Bankka {
   def initializeBankDao(system: ActorSystem[_]) = {
     implicit val bec: ExecutionContextExecutor =
       system.dispatchers.lookup(DispatcherSelector.fromConfig("blocking-dispatcher"))
-    new BankDao(new InMemoryClientDao(), new InMemoryAccountDao(), new InMemoryTransactionDao)
+    BankDao.InMemoryBankDao
   }
 
   def rootBehavior(httpPort: Int, bankDao: BankDao): Behavior[Nothing] = Behaviors.setup[Nothing] { context =>

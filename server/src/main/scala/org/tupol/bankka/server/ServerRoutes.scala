@@ -1,18 +1,20 @@
 package org.tupol.bankka.server
 
-import akka.actor.typed.{ ActorSystem, Scheduler }
+import java.util.UUID
+
+import akka.actor.typed.{ActorSystem, Scheduler}
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import akka.util.Timeout
-import org.json4s.ext.{ JavaTimeSerializers, JavaTypesSerializers }
+import org.json4s.ext.{JavaTimeSerializers, JavaTypesSerializers}
 import org.tupol.bankka.data.dao.BankDao
-import org.tupol.bankka.data.model.ClientId
-import org.tupol.bankka.server.ClientActor.ClientResponse
+import org.tupol.bankka.data.model.{AccountId, ClientId}
+import org.tupol.bankka.server.ClientActor.{AccountResponse, ClientResponse, TransactionResponse}
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.util.{ Failure, Success, Try }
+import scala.util.{Failure, Success}
 
 class ServerRoutes(
   system: ActorSystem[_],
@@ -47,9 +49,7 @@ class ServerRoutes(
             .ask[ClientResponse](ref => ClientActor.CreateClient(clientName, ref))
           onComplete(process) {
             case Success(client) => complete(client)
-            case Failure(error) =>
-              error.printStackTrace()
-              failWith(error)
+            case Failure(error)  => error.printStackTrace; failWith(error)
           }
         }
       }
@@ -58,12 +58,67 @@ class ServerRoutes(
         get {
           formFields("clientId") { clientId =>
             val process = bringClient(clientId)
-              .ask[ClientResponse](ref => ClientActor.Get(ref))
+              .ask[ClientResponse](ref => ClientActor.GetClient(ref))
             onComplete(process) {
               case Success(client) => complete(client)
-              case Failure(error) =>
-                error.printStackTrace()
-                failWith(error)
+              case Failure(error)  => error.printStackTrace; failWith(error)
+            }
+          }
+        }
+      } ~
+      path("activate") {
+        post {
+          formFields("clientId") { clientId =>
+            val process = bringClient(clientId)
+              .ask[ClientResponse](ref => ClientActor.ActivateClient(ref))
+            onComplete(process) {
+              case Success(client) => complete(client)
+              case Failure(error)  => error.printStackTrace; failWith(error)
+            }
+          }
+        }
+      } ~
+      path("deactivate") {
+        post {
+          formFields("clientId") { clientId =>
+            val process = bringClient(clientId)
+              .ask[ClientResponse](ref => ClientActor.DeactivateClient(ref))
+            onComplete(process) {
+              case Success(client) => complete(client)
+              case Failure(error)  => error.printStackTrace; failWith(error)
+            }
+          }
+        }
+      } ~
+      path("create-account") {
+        post {
+          formFields("clientId", "creditLimit", "initialAmount") {
+            (clientId, creditLimit, initialAmount) =>
+              val process = bringClient(clientId)
+                .ask[AccountResponse](
+                  ref => ClientActor.CreateAccount(creditLimit.toLong, initialAmount.toLong, ref)
+                )
+              onComplete(process) {
+                case Success(client) => complete(client)
+                case Failure(error)  => error.printStackTrace; failWith(error)
+              }
+          }
+        }
+      } ~
+      path("order-payment") {
+        post {
+          formFields("clientId", "from", "to", "amount") { (clientId, from, to, amount) =>
+            val process = for {
+              fromAccountId <- Future.fromTry(AccountId.fromString(from))
+              toAccountId   <- Future.fromTry(AccountId.fromString(to))
+              response <- bringClient(clientId)
+                           .ask[TransactionResponse](
+                             ref => ClientActor.OrderPayment(fromAccountId, toAccountId, amount.toLong, ref)
+                           )
+            } yield response
+            onComplete(process) {
+              case Success(client) => complete(client)
+              case Failure(error)  => error.printStackTrace; failWith(error)
             }
           }
         }

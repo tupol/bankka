@@ -5,6 +5,10 @@ import org.tupol.bankka.data.model._
 
 import scala.concurrent.{ExecutionContext, Future}
 
+object BankDao {
+  def InMemoryBankDao( implicit ec: ExecutionContext, logger: Logger ) =
+    new BankDao(new InMemoryClientDao, new InMemoryAccountDao(), new InMemoryTransactionDao)
+}
 class BankDao(val clientDao: ClientDao, val accountDao: AccountDao, val transactionDao: TransactionDao)(
   implicit ec: ExecutionContext, logger: Logger
 ) {

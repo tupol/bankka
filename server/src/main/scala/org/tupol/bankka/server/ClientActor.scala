@@ -1,14 +1,15 @@
 package org.tupol.bankka.server
 
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
-import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.scaladsl.{ ActorContext, Behaviors, StashBuffer }
+import akka.actor.typed.{ ActorRef, Behavior }
+import akka.event.Logging.Error.NoCause
 import org.tupol.bankka.commons.SerializableMessage
 import org.tupol.bankka.data.dao.BankDao
 import org.tupol.bankka.data.model._
-import org.tupol.bankka.server.ClientActor.{ClientResponse, _}
+import org.tupol.bankka.server.ClientActor.{ ClientResponse, _ }
 
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
-import scala.util.{Failure, Success, Try}
+import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor, Future }
+import scala.util.{ Failure, Success, Try }
 
 object ClientActor {
 
@@ -27,45 +28,36 @@ object ClientActor {
   sealed trait Response extends Message
 
   case class CreateClient(name: String, replyTo: ActorRef[ClientResponse]) extends Request
+  case class GetClient(replyTo: ActorRef[ClientResponse])                  extends Request
+  case class DeactivateClient(replyTo: ActorRef[ClientResponse])           extends Request
+  case class ActivateClient(replyTo: ActorRef[ClientResponse])             extends Request
 
-  case class Get(replyTo: ActorRef[ClientResponse]) extends Request
-
-  case class Deactivate(replyTo: ActorRef[ClientResponse]) extends Request
-
-  case class Activate(replyTo: ActorRef[ClientResponse]) extends Request
+  sealed trait ClientResponse                                     extends Response
+  case class ClientResult(client: Client)                         extends ClientResponse
+  case class ClientResponseException(private val message: String) extends ClientResponse
+  case class ClientNotFound(clientId: ClientId)                   extends ClientResponse
+  case class ClientAlreadyExists(clientId: ClientId)              extends ClientResponse
+  case class ClientException(private val message: String, cause: Throwable = NoCause)
+      extends Exception(message, cause)
+      with ClientResponse
 
   case class CreateAccount(creditLimit: Long = 0, amount: Long = 0, replyTo: ActorRef[AccountResponse]) extends Request
 
-  case class OrderPayment(from: AccountId, to: AccountId, amount: Long, replyTo: ActorRef[Try[TransactionResponse]])
+  sealed trait AccountResponse                                   extends Response
+  case class AccountResult(accountId: AccountId, client: Client) extends AccountResponse
+  case class AccountException(private val message: String, cause: Throwable = NoCause)
+      extends Exception(message, cause)
+      with AccountResponse
+
+  case class OrderPayment(from: AccountId, to: AccountId, amount: Long, replyTo: ActorRef[TransactionResponse])
       extends Request
+  case class ReceivePayment(transaction: Transaction, replyTo: ActorRef[TransactionResponse]) extends Request
 
-  case class ReceivePayment(transaction: Transaction, replyTo: ActorRef[Try[TransactionResponse]]) extends Request
-
-  class ClientException(private val message: String, cause: Throwable = null)
+  sealed trait TransactionResponse                                       extends Response
+  case class TransactionResult(transaction: Transaction, client: Client) extends TransactionResponse
+  case class TransactionException(private val message: String, cause: Throwable = NoCause)
       extends Exception(message, cause)
-      with Response
-
-  sealed trait ClientResponse extends Response
-
-  case class ClientResult(client: Client) extends ClientResponse
-
-  case class ClientResponseException(private val message: String) extends ClientException(message)
-
-  case class ClientNotFound(clientId: ClientId) extends ClientException(s"Client not found: $clientId") with ClientResponse
-
-  case class ClientAlreadyExists(clientId: ClientId) extends ClientException(s"Client already exists: $clientId") with ClientResponse
-
-  case class AccountResponse(accountId: AccountId, client: Client) extends Response
-
-  case class AccountError(private val message: String, cause: Throwable = null)
-      extends Exception(message, cause)
-      with Response
-
-  case class TransactionResponse(transaction: Transaction, client: Client) extends Response
-
-  case class TransactionError(private val message: String, cause: Throwable = null)
-      extends Exception(message, cause)
-      with Response
+      with TransactionResponse
 
 }
 
@@ -74,15 +66,15 @@ class ClientActor(context: ActorContext[Message], buffer: StashBuffer[Message], 
   implicit val ec: ExecutionContextExecutor = context.executionContext
 
   private def start(): Behavior[Message] =
-    Behaviors.receivePartial[Message] {
-      case (context, CreateClient(name, replyTo)) =>
-        context.log.info(s"Creating client $name.")
+    Behaviors.receiveMessagePartial[Message] {
+      case CreateClient(name, replyTo) =>
+        context.log.info(s"Creating client $name with id $clientId.")
         context.pipeToSelf(bankDao.clientDao.create(clientId, name)) {
           case Success(client) => ClientResult(client)
           case Failure(cause)  => new ClientException(s"Error while creating client $name.", cause)
         }
         busyWithClient(replyTo)
-      case (context, Get(replyTo)) =>
+      case GetClient(replyTo) =>
         context.log.info(s"Retrieving client $clientId.")
         context.pipeToSelf(bankDao.clientDao.findById(clientId)) {
           case Success(Some(client)) => ClientResult(client)
@@ -92,29 +84,30 @@ class ClientActor(context: ActorContext[Message], buffer: StashBuffer[Message], 
         busyWithClient(replyTo)
     }
 
-  private def busyWithTransaction(replyTo: ActorRef[Try[TransactionResponse]]): Behavior[Message] =
+  private def busyWithTransaction(replyTo: ActorRef[TransactionResponse]): Behavior[Message] =
     Behaviors.receiveMessage[Message] {
-      case response: TransactionResponse =>
-        replyTo ! Success(response)
+      case response: TransactionResult =>
+        replyTo ! response
         buffer.unstashAll(active(response.client))
-      case exception: TransactionError =>
-        replyTo ! Failure(exception)
-        throw exception
+      case error: TransactionException =>
+        replyTo ! error
+        throw error
       case other =>
-        println(s"Busy with transaction; Stashing $other")
+        context.log.debug(s"Busy with transaction; Stashing $other")
         buffer.stash(other)
         Behaviors.same
     }
 
   private def busyWithAccount(replyTo: ActorRef[AccountResponse]): Behavior[Message] =
     Behaviors.receiveMessage[Message] {
-      case response: AccountResponse =>
+      case response: AccountResult =>
         replyTo ! response
         buffer.unstashAll(active(response.client))
-      case exception: AccountError =>
-        throw exception
+      case error: AccountException =>
+        replyTo ! error
+        throw error
       case other =>
-        println(s"Busy with account; Stashing $other")
+        context.log.debug(s"Busy with account; Stashing $other")
         buffer.stash(other)
         Behaviors.same
     }
@@ -125,36 +118,64 @@ class ClientActor(context: ActorContext[Message], buffer: StashBuffer[Message], 
         replyTo ! response
         buffer.unstashAll(active(response.client))
       case exception: ClientException =>
+        exception.printStackTrace()
         throw exception
       case other =>
-        println(s"Stashing $other")
+        context.log.debug(s"Stashing $other")
         buffer.stash(other)
         Behaviors.same
     }
 
-  private def active(client: Client): Behavior[Message] = Behaviors.receiveMessage[Message] {
-    case Get(replyTo) =>
-      replyTo ! ClientResult(client)
-      Behaviors.same
-    case OrderPayment(from, to, amount, replyTo) =>
-      context.pipeToSelf(orderPayment(client, from, to, amount)) {
-        case Success((t, c)) => TransactionResponse(t, c)
-        case Failure(cause)  => TransactionError("Order payment failed", cause)
-      }
-      busyWithTransaction(replyTo)
-    case ReceivePayment(transaction: Transaction, replyTo) =>
-      context.pipeToSelf(receivePayment(client, transaction)) {
-        case Success((t, c)) => TransactionResponse(t, c)
-        case Failure(cause)  => TransactionError("Receive payment failed", cause)
-      }
-      busyWithTransaction(replyTo)
-    case CreateAccount(creditLimit, amount, replyTo) =>
-      context.pipeToSelf(bankDao.accountDao.create(clientId, creditLimit, amount)) {
-        case Success(account) => AccountResponse(account.id, client.withAccount(account))
-        case Failure(cause)   => AccountError("Error creating account", cause)
-      }
-      busyWithAccount(replyTo)
-  }
+  private def active(client: Client): Behavior[Message] =
+    Behaviors.receiveMessage[Message] {
+      case GetClient(replyTo) =>
+        replyTo ! ClientResult(client)
+        Behaviors.same
+      case ActivateClient(replyTo) =>
+        context.log.info(s"Activating client $clientId.")
+        if (client.active) {
+          replyTo ! ClientException(s"The client ${client.id} is already active")
+          Behaviors.same
+        } else
+          context.pipeToSelf(bankDao.clientDao.update(client.copy(active = true))) {
+            case Success(client) => ClientResult(client)
+            case Failure(cause)  => ClientException(s"Error while activating the client ${client.id} ", cause)
+          }
+        busyWithClient(replyTo)
+      case DeactivateClient(replyTo) =>
+        context.log.info(s"Deactivating client $clientId.")
+        if (!client.active) {
+          replyTo ! ClientException(s"The client  ${client.id} is already deactivated")
+          Behaviors.same
+        } else
+          context.pipeToSelf(bankDao.clientDao.update(client.copy(active = false))) {
+            case Success(client) => ClientResult(client)
+            case Failure(cause)  => ClientException(s"Error while deactivating the client ${client.id}", cause)
+          }
+        busyWithClient(replyTo)
+      case OrderPayment(from, to, amount, replyTo) =>
+        context.log.info(s"Ordering payment for client $clientId.")
+        context.pipeToSelf(orderPayment(client, from, to, amount)) {
+          case Success((t, c)) => TransactionResult(t, c)
+          case Failure(cause)  => TransactionException(s"Order payment failed for client ${client.id}", cause)
+        }
+        busyWithTransaction(replyTo)
+      case ReceivePayment(transaction: Transaction, replyTo) =>
+        context.log.info(s"Receiving payment for client $clientId.")
+        context.pipeToSelf(receivePayment(client, transaction)) {
+          case Success((t, c)) => TransactionResult(t, c)
+          case Failure(cause)  => TransactionException(s"Receive payment failed for client ${client.id}", cause)
+        }
+        busyWithTransaction(replyTo)
+      case CreateAccount(creditLimit, amount, replyTo) =>
+        context.log.info(s"Creating account for client $clientId with creditLimit $creditLimit and amount $amount")
+        context.pipeToSelf(bankDao.accountDao.create(clientId, creditLimit, amount)) {
+          case Success(account) => AccountResult(account.id, client.withAccount(account))
+          case Failure(cause)   => AccountException(s"Error creating account for client ${client.id}", cause)
+        }
+        busyWithAccount(replyTo)
+
+    }
 
   private def orderPayment(client: Client, from: AccountId, to: AccountId, amount: Long)(
     implicit ec: ExecutionContext
