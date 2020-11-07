@@ -10,7 +10,7 @@ case class ClientId(value: String = UUID.randomUUID().toString) {
   override def toString: String = value
 }
 
-case class Client(id: ClientId, name: String, accounts: Map[String, Account], active: Boolean = true) {
+case class Client(id: ClientId, name: String, accounts: Map[String, Account] = Map(), active: Boolean = true) {
   def label: String = s"$id:$name"
   def account(id: AccountId): Try[Account] =
     accounts.get(id.toString) match {

@@ -20,6 +20,7 @@ lazy val server = (project in file("server"))
     libraryDependencies ++= ServerCoreDependencies,
     libraryDependencies ++= ServerTestDependencies,
   )
+  .configs(MultiJvm) // or .enablePlugins(MultiJvmPlugin) ???
 
 lazy val client = (project in file("client"))
   .settings(commonSettings: _*)
@@ -28,7 +29,7 @@ lazy val client = (project in file("client"))
   )
 
 lazy val root = (project in file("."))
+  .settings(name := "bankka")
   .settings(commonSettings: _*)
   .aggregate(client)
   .aggregate(server)
-  .settings(name := "bankka")

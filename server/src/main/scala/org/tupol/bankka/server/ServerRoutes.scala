@@ -1,7 +1,5 @@
 package org.tupol.bankka.server
 
-import java.util.UUID
-
 import akka.actor.typed.{ActorSystem, Scheduler}
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.http.scaladsl.server.Directives._
@@ -11,8 +9,8 @@ import org.json4s.ext.{JavaTimeSerializers, JavaTypesSerializers}
 import org.tupol.bankka.data.dao.BankDao
 import org.tupol.bankka.data.model.{AccountId, ClientId}
 import org.tupol.bankka.server.ClientActor.{AccountResponse, ClientResponse, TransactionResponse}
+import org.tupol.bankka.server.ClientSharding.bringClient
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
@@ -32,18 +30,14 @@ class ServerRoutes(
   implicit val ec                   = system.executionContext
   implicit val scheduler: Scheduler = system.scheduler
 
-  private val sharding: ClusterSharding = ClusterSharding(system)
+  private implicit val sharding: ClusterSharding = ClusterSharding(system)
   // This is very important to describe how the instances will be created inside the system
   ClientSharding.initializeSharding(sharding, bankDao, stashSize)
-
-  def bringClient(name: String) =
-    sharding
-      .entityRefFor(ClientSharding.ClientTypeKey, name)
 
   val routes: Route =
     path("create") {
       post {
-        formFields("clientName") { clientName =>
+        formFields("client-name") { clientName =>
           val clientId = ClientId().toString
           val process = bringClient(clientId)
             .ask[ClientResponse](ref => ClientActor.CreateClient(clientName, ref))
@@ -56,7 +50,7 @@ class ServerRoutes(
     } ~
       path("find") {
         get {
-          formFields("clientId") { clientId =>
+          formFields("client-id") { clientId =>
             val process = bringClient(clientId)
               .ask[ClientResponse](ref => ClientActor.GetClient(ref))
             onComplete(process) {
@@ -68,7 +62,7 @@ class ServerRoutes(
       } ~
       path("activate") {
         post {
-          formFields("clientId") { clientId =>
+          formFields("client-id") { clientId =>
             val process = bringClient(clientId)
               .ask[ClientResponse](ref => ClientActor.ActivateClient(ref))
             onComplete(process) {
@@ -80,7 +74,7 @@ class ServerRoutes(
       } ~
       path("deactivate") {
         post {
-          formFields("clientId") { clientId =>
+          formFields("client-id") { clientId =>
             val process = bringClient(clientId)
               .ask[ClientResponse](ref => ClientActor.DeactivateClient(ref))
             onComplete(process) {
@@ -92,30 +86,25 @@ class ServerRoutes(
       } ~
       path("create-account") {
         post {
-          formFields("clientId", "creditLimit", "initialAmount") {
-            (clientId, creditLimit, initialAmount) =>
-              val process = bringClient(clientId)
-                .ask[AccountResponse](
-                  ref => ClientActor.CreateAccount(creditLimit.toLong, initialAmount.toLong, ref)
-                )
-              onComplete(process) {
-                case Success(client) => complete(client)
-                case Failure(error)  => error.printStackTrace; failWith(error)
-              }
+          formFields("client-id", "credit-limit", "initial-amount") { (clientId, creditLimit, initialAmount) =>
+            val process = bringClient(clientId)
+              .ask[AccountResponse](
+                ref => ClientActor.CreateAccount(creditLimit.toLong, initialAmount.toLong, ref)
+              )
+            onComplete(process) {
+              case Success(client) => complete(client)
+              case Failure(error)  => error.printStackTrace; failWith(error)
+            }
           }
         }
       } ~
       path("order-payment") {
         post {
-          formFields("clientId", "from", "to", "amount") { (clientId, from, to, amount) =>
-            val process = for {
-              fromAccountId <- Future.fromTry(AccountId.fromString(from))
-              toAccountId   <- Future.fromTry(AccountId.fromString(to))
-              response <- bringClient(clientId)
-                           .ask[TransactionResponse](
-                             ref => ClientActor.OrderPayment(fromAccountId, toAccountId, amount.toLong, ref)
-                           )
-            } yield response
+          formFields("client-id", "from", "to", "amount") { (clientId, from, to, amount) =>
+            val process = bringClient(clientId)
+              .ask[TransactionResponse](
+                ref => ClientActor.OrderPayment(AccountId(from), AccountId(to), amount.toLong, ref)
+              )
             onComplete(process) {
               case Success(client) => complete(client)
               case Failure(error)  => error.printStackTrace; failWith(error)

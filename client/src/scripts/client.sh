@@ -1,71 +1,56 @@
-
 CLIENT_NAME=$1
 
+SCRIPT_DIR="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
-echo Creating client $CLIENT_NAME
+source $SCRIPT_DIR/client-api.sh
 
-curl -s -X POST http://127.0.0.1:12552/create -F "clientName=$CLIENT_NAME"
+CLIENT_ID=$(create_client $CLIENT_NAME)
 
-echo
+print_client $CLIENT_ID
 
-CLIENT_ID=$(curl -s -X POST http://127.0.0.1:12552/create -F "clientName=$CLIENT_NAME" | jq -r '.client.id.value')
+ echo
+ echo Deactivating client $CLIENT_NAME with id $CLIENT_ID
+ echo
 
-echo
-echo Created client $CLIENT_NAME with id $CLIENT_ID
-echo
-
-curl -s -X GET  http://127.0.0.1:12551/find -F "clientId=$CLIENT_ID"
-
-echo
-echo Deactivating client $CLIENT_NAME with id $CLIENT_ID
-echo
-
-curl -s -X POST  http://127.0.0.1:12551/deactivate -F "clientId=$CLIENT_ID"
+deactivate_client $CLIENT_ID
+print_client $CLIENT_ID
 
 echo
 echo Activating client $CLIENT_NAME with id $CLIENT_ID
 echo
-echo 'curl -s -X POST  http://127.0.0.1:12551/activate -F "clientId='$CLIENT_ID'"'
-curl -s -X POST  http://127.0.0.1:12551/activate -F "clientId=$CLIENT_ID"
+
+activate_client $CLIENT_ID
+print_client $CLIENT_ID
 
 echo
 echo Creating credit account for client $CLIENT_NAME with id $CLIENT_ID
 echo
-echo "curl -s -X POST http://127.0.0.1:12551/create-account  -F "clientId=$CLIENT_ID" -F "creditLimit=1000" -F "initialAmount=0""
-RESPONSE=$(curl -s -X POST http://127.0.0.1:12551/create-account?clientId -F "clientId=$CLIENT_ID" -F "creditLimit=1000" -F "initialAmount=0")
-ACCOUNT1=$(echo $RESPONSE | jq -r '.accountId.value')
+ACCOUNT1=$(create_credit_account $CLIENT_ID 1000)
 
-echo
-echo "Created account $ACCOUNT1"
+print_client $CLIENT_ID
 
 echo
 echo Creating debit account for client $CLIENT_NAME with id $CLIENT_ID
 echo
-echo "curl -s -X POST http://127.0.0.1:12551/create-account  -F "clientId=$CLIENT_ID" -F "creditLimit=0" -F "initialAmount=1000""
-RESPONSE=$(curl -s -X POST http://127.0.0.1:12551/create-account?clientId -F "clientId=$CLIENT_ID" -F "creditLimit=0" -F "initialAmount=1000")
-ACCOUNT2=$(echo $RESPONSE | jq -r '.accountId.value')
+ACCOUNT2=$(create_debit_account $CLIENT_ID 1000)
 
+print_client $CLIENT_ID
 
-echo
-echo "Created account $ACCOUNT2"
-
-echo
-curl -s -X GET  http://127.0.0.1:12551/find -F "clientId=$CLIENT_ID" | jq
-echo
 
 
 echo
 echo Order payment
 echo
-echo "curl -s -X POST http://127.0.0.1:12551/order-payment -F "clientId=$CLIENT_ID" -F "from=$ACCOUNT2" -F "to=$ACCOUNT1" -F "amount=100""
-curl -s -X POST http://127.0.0.1:12551/order-payment -F "clientId=$CLIENT_ID" -F "from=$ACCOUNT2" -F "to=$ACCOUNT1" -F "amount=100"
+order_payment $CLIENT_ID $ACCOUNT2 $ACCOUNT1 100 | jq -r '.transaction'
+
+print_client $CLIENT_ID
+
+
 
 echo
 echo Order payment
 echo
-echo "curl -s -X POST http://127.0.0.1:12551/order-payment -F "clientId=$CLIENT_ID" -F "from=$ACCOUNT2" -F "to=$ACCOUNT1" -F "amount=100""
-curl -s -X POST http://127.0.0.1:12551/order-payment -F "clientId=$CLIENT_ID" -F "from=$ACCOUNT2" -F "to=$ACCOUNT1" -F "amount=100"
+order_payment $CLIENT_ID $ACCOUNT2 $ACCOUNT1 1000
 
-echo
-curl -s -X GET  http://127.0.0.1:12551/find -F "clientId=$CLIENT_ID" | jq
-echo
+print_client $CLIENT_ID
+

@@ -5,10 +5,8 @@ import java.util.UUID
 
 import com.fasterxml.jackson.annotation.{JsonSubTypes, JsonTypeInfo}
 
-import scala.concurrent.{ExecutionContext, Future}
-
-case class TransactionId(value: UUID = UUID.randomUUID()) {
-  override def toString: String = value.toString
+case class TransactionId(value: String = UUID.randomUUID().toString) {
+  override def toString: String = value
 }
 
 case class RejectionInfo(reason: String, rejectedAt: Instant = Instant.now())

@@ -2,7 +2,7 @@ package org.tupol.bankka.server
 
 import akka.actor.typed.ActorRef
 import akka.cluster.sharding.typed.ShardingEnvelope
-import akka.cluster.sharding.typed.scaladsl.{ ClusterSharding, Entity, EntityTypeKey }
+import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityRef, EntityTypeKey}
 import org.tupol.bankka.data.dao.BankDao
 import org.tupol.bankka.data.model.ClientId
 
@@ -19,4 +19,7 @@ object ClientSharding {
       ClientActor(ClientId(entityContext.entityId), bankDao, stashSize)
     })
 
+  def bringClient(clientId: String)(implicit sharding: ClusterSharding): EntityRef[ClientActor.Message] =
+    sharding
+      .entityRefFor(ClientSharding.ClientTypeKey, clientId)
 }

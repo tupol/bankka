@@ -4,11 +4,8 @@ import java.util.UUID
 
 import scala.util.Try
 
-case class AccountId(value: UUID = UUID.randomUUID()) {
-  override def toString: String = value.toString
-}
-object AccountId {
-  def fromString(value: String): Try[AccountId] = Try(AccountId(UUID.fromString(value)))
+case class AccountId(value: String = UUID.randomUUID().toString) {
+  override def toString: String = value
 }
 
 case class Account(id: AccountId, clientId: ClientId, creditLimit: Long, amount: Long, active: Boolean = true) {

@@ -18,7 +18,7 @@ import scala.concurrent.{ ExecutionContext, Future }
 trait TransactionDao {
   def create(from: AccountId, to: AccountId, amount: Long): Future[Transaction]
   def createSameClient(from: Account, to: Account, amount: Long): Future[Transaction]
-  def find(id: TransactionId): Future[Option[Transaction]]
+  def findById(id: TransactionId): Future[Option[Transaction]]
   def findAll: Future[Iterable[Transaction]]
   def findAllStarted: Future[Iterable[StartTransaction]]
   def findAllCompleted: Future[Iterable[CompletedTransaction]]
@@ -51,7 +51,7 @@ class InMemoryTransactionDao(implicit ec: ExecutionContext) extends TransactionD
       }
     }
 
-  override def find(id: TransactionId): Future[Option[Transaction]] =
+  override def findById(id: TransactionId): Future[Option[Transaction]] =
     Future {
       synchronized {
         transactions.get(id)

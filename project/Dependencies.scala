@@ -9,10 +9,12 @@ object Dependencies {
     val akkaJson4s      = "1.35.0"
     val json4s          = "3.6.9"
     val logback         = "1.2.3"
-    val scalatest       = "3.1.4"
-    val pureconfig      = "0.14.0"
+    val mockito         = "1.14.+"
+    val scalacheck      = "1.14.+"
+    val scalatest       = "3.1.+"
+    val scalamock       = "4.4.+"
+    val pureconfig      = "0.14.+"
   }
-
 
   val ServerCoreDependencies: Seq[ModuleID] = Seq(
     "com.typesafe.akka"     %% "akka-actor-typed"            % Versions.akkaVersion,
@@ -23,12 +25,17 @@ object Dependencies {
     "org.json4s"            %% "json4s-jackson"              % Versions.json4s,
     "org.json4s"            %% "json4s-ext"                  % Versions.json4s,
     "de.heikoseeberger"     %% "akka-http-json4s"            % Versions.akkaJson4s,
-    "ch.qos.logback"        %  "logback-classic"             % Versions.logback,
+    "ch.qos.logback"        % "logback-classic"              % Versions.logback,
     "com.github.pureconfig" %% "pureconfig"                  % Versions.pureconfig
   )
   val ServerTestDependencies: Seq[ModuleID] = Seq(
-    "com.typesafe.akka"     %% "akka-actor-testkit-typed"    % Versions.akkaVersion % Test,
-    "org.scalatest"         %% "scalatest"                   % Versions.scalatest   % Test
+    "com.typesafe.akka" %% "akka-actor-testkit-typed" % Versions.akkaVersion % Test,
+    "com.typesafe.akka" %% "akka-multi-node-testkit"  % Versions.akkaVersion % Test,
+    "org.scalatest"     %% "scalatest"                % Versions.scalatest   % Test,
+    "org.scalamock"     %% "scalamock"                % Versions.scalamock   % Test,
+    "org.scalacheck"    %% "scalacheck"               % Versions.scalacheck  % Test,
+    "org.mockito"       %% "mockito-scala"            % Versions.mockito     % Test,
+    "org.mockito"       %% "mockito-scala-scalatest"  % Versions.mockito     % Test
   )
 
 }

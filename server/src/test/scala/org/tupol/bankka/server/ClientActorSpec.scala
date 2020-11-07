@@ -21,19 +21,18 @@ class ClientActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike wit
 
     "succeed" in {
       val bankDao          = InMemoryBankDao
-      val replyClientProbe = createTestProbe[ClientActor.ClientResponse]
+      val replyClientProbe = createTestProbe[ClientActor.ClientResponse]()
       val testClient      = spawn(ClientActor(clientId, bankDao, 100))
       testClient ! ClientActor.CreateClient(clientName, replyClientProbe.ref)
-      val clientCreatedResponse = replyClientProbe.receiveMessage()
-      clientCreatedResponse shouldBe a[ClientResult]
-      inside(clientCreatedResponse) { case ClientResult(client) => client shouldBe expectedClient }
+      val clientCreatedResponse = replyClientProbe.expectMessageType[ClientResult]
+      clientCreatedResponse.client shouldBe expectedClient
       testClient ! ClientActor.GetClient(replyClientProbe.ref)
-      val clientFoundResponse = replyClientProbe.receiveMessage()
-      inside(clientFoundResponse) { case ClientResult(client) => client shouldBe expectedClient }
+      val clientFoundResponse = replyClientProbe.expectMessageType[ClientResult]
+      clientFoundResponse.client shouldBe expectedClient
     }
     "fail if the client was not created yet" in {
       val bankDao          = InMemoryBankDao
-      val replyClientProbe = createTestProbe[ClientActor.ClientResponse]
+      val replyClientProbe = createTestProbe[ClientActor.ClientResponse]()
       val testClient      = spawn(ClientActor(clientId, bankDao, 100))
       testClient ! ClientActor.GetClient(replyClientProbe.ref)
       replyClientProbe.expectNoMessage()
@@ -44,32 +43,34 @@ class ClientActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike wit
     val clientId       = ClientId()
     val clientName     = "gigi"
 
-      val bankDao          = InMemoryBankDao
-      val replyClientProbe = createTestProbe[ClientActor.ClientResponse]
-      val testClient       = spawn(ClientActor(clientId, bankDao, 100))
-      testClient ! ClientActor.CreateClient(clientName, replyClientProbe.ref)
-      replyClientProbe.expectMessageType[ClientResult]
+    val bankDao          = InMemoryBankDao
+    val replyClientProbe = createTestProbe[ClientActor.ClientResponse]()
+    val testClient       = spawn(ClientActor(clientId, bankDao, 100))
+    testClient ! ClientActor.CreateClient(clientName, replyClientProbe.ref)
+    replyClientProbe.expectMessageType[ClientResult]
 
-      "activation fails" in {
-        testClient ! ClientActor.ActivateClient(replyClientProbe.ref)
-        val activationResponse = replyClientProbe.receiveMessage()
-        activationResponse shouldBe a [ClientException]
-      }
-      "deactivation succeeds" in {
-        testClient ! ClientActor.DeactivateClient(replyClientProbe.ref)
-        val deactivationResponse = replyClientProbe.receiveMessage()
-        inside(deactivationResponse) { case ClientResult(client) => client.active shouldBe false }
-      }
-      "deactivation fails a second time" in {
-        testClient ! ClientActor.DeactivateClient(replyClientProbe.ref)
-        val deactivationResponse = replyClientProbe.receiveMessage()
-        deactivationResponse shouldBe a [ClientException]
-      }
-      "activation succeeds" in {
-        testClient ! ClientActor.ActivateClient(replyClientProbe.ref)
-        val activationResponse = replyClientProbe.receiveMessage()
-        inside(activationResponse) { case ClientResult(client) => client.active shouldBe true }
-      }
+    "activation fails" in {
+      testClient ! ClientActor.ActivateClient(replyClientProbe.ref)
+      val activationResponse = replyClientProbe.expectMessageType[ClientException]
+    }
+    "deactivation succeeds" in {
+      testClient ! ClientActor.GetClient(replyClientProbe.ref)
+      val clientFoundResponse = replyClientProbe.expectMessageType[ClientResult]
+
+      testClient ! ClientActor.DeactivateClient(replyClientProbe.ref)
+      val deactivationResponse = replyClientProbe.expectMessageType[ClientResult]
+      deactivationResponse.client.active shouldBe false
+    }
+    "deactivation fails a second time" in {
+      testClient ! ClientActor.DeactivateClient(replyClientProbe.ref)
+      val deactivationResponse = replyClientProbe.receiveMessage()
+      deactivationResponse shouldBe a [ClientException]
+    }
+    "activation succeeds" in {
+      testClient ! ClientActor.ActivateClient(replyClientProbe.ref)
+      val deactivationResponse = replyClientProbe.expectMessageType[ClientResult]
+      deactivationResponse.client.active shouldBe true
+    }
   }
 
   "Transaction between own accounts" should {
@@ -77,9 +78,9 @@ class ClientActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike wit
     val clientName = "gigi"
     "succeed" in {
       val bankDao               = InMemoryBankDao
-      val replyClientProbe      = createTestProbe[ClientActor.ClientResponse]
-      val replyAccountProbe     = createTestProbe[ClientActor.AccountResponse]
-      val replyTransactionProbe = createTestProbe[ClientActor.TransactionResponse]
+      val replyClientProbe      = createTestProbe[ClientActor.ClientResponse]()
+      val replyAccountProbe     = createTestProbe[ClientActor.AccountResponse]()
+      val replyTransactionProbe = createTestProbe[ClientActor.TransactionResponse]()
       val testClient1           = spawn(ClientActor(clientId, bankDao, 100))
       testClient1 ! ClientActor.CreateClient(clientName, replyClientProbe.ref)
       testClient1 ! ClientActor.CreateAccount(0, 1000, replyAccountProbe.ref)
@@ -114,9 +115,9 @@ class ClientActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike wit
 
     "fail due to lack of funds" in {
       val bankDao               = InMemoryBankDao
-      val replyClientProbe      = createTestProbe[ClientActor.ClientResponse]
-      val replyAccountProbe     = createTestProbe[ClientActor.AccountResponse]
-      val replyTransactionProbe = createTestProbe[ClientActor.TransactionResponse]
+      val replyClientProbe      = createTestProbe[ClientActor.ClientResponse]()
+      val replyAccountProbe     = createTestProbe[ClientActor.AccountResponse]()
+      val replyTransactionProbe = createTestProbe[ClientActor.TransactionResponse]()
       val testClient1           = spawn(ClientActor(clientId, bankDao, 100))
       testClient1 ! ClientActor.CreateClient(clientName, replyClientProbe.ref)
       testClient1 ! ClientActor.CreateAccount(0, 0, replyAccountProbe.ref)
@@ -139,9 +140,9 @@ class ClientActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike wit
 
     "fail if amount is 0" in {
       val bankDao               = InMemoryBankDao
-      val replyClientProbe      = createTestProbe[ClientActor.ClientResponse]
-      val replyAccountProbe     = createTestProbe[ClientActor.AccountResponse]
-      val replyTransactionProbe = createTestProbe[ClientActor.TransactionResponse]
+      val replyClientProbe      = createTestProbe[ClientActor.ClientResponse]()
+      val replyAccountProbe     = createTestProbe[ClientActor.AccountResponse]()
+      val replyTransactionProbe = createTestProbe[ClientActor.TransactionResponse]()
       val testClient1           = spawn(ClientActor(clientId, bankDao, 100))
       testClient1 ! ClientActor.CreateClient(clientName, replyClientProbe.ref)
       testClient1 ! ClientActor.CreateAccount(0, 0, replyAccountProbe.ref)
@@ -165,9 +166,9 @@ class ClientActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike wit
     "fail if source and target accounts are the same " in {
 
       val bankDao               = InMemoryBankDao
-      val replyClientProbe      = createTestProbe[ClientActor.ClientResponse]
-      val replyAccountProbe     = createTestProbe[ClientActor.AccountResponse]
-      val replyTransactionProbe = createTestProbe[ClientActor.TransactionResponse]
+      val replyClientProbe      = createTestProbe[ClientActor.ClientResponse]()
+      val replyAccountProbe     = createTestProbe[ClientActor.AccountResponse]()
+      val replyTransactionProbe = createTestProbe[ClientActor.TransactionResponse]()
       val testClient1           = spawn(ClientActor(clientId, bankDao, 100))
       testClient1 ! ClientActor.CreateClient(clientName, replyClientProbe.ref)
       testClient1 ! ClientActor.CreateAccount(0, 1000, replyAccountProbe.ref)
@@ -191,9 +192,9 @@ class ClientActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike wit
 
       val bankDao               = InMemoryBankDao
       val clientId              = ClientId()
-      val replyClientProbe      = createTestProbe[ClientActor.ClientResponse]
-      val replyAccountProbe     = createTestProbe[ClientActor.AccountResponse]
-      val replyTransactionProbe = createTestProbe[ClientActor.TransactionResponse]
+      val replyClientProbe      = createTestProbe[ClientActor.ClientResponse]()
+      val replyAccountProbe     = createTestProbe[ClientActor.AccountResponse]()
+      val replyTransactionProbe = createTestProbe[ClientActor.TransactionResponse]()
       val testClient1           = spawn(ClientActor(clientId, bankDao, 100))
       testClient1 ! ClientActor.CreateClient("gigi", replyClientProbe.ref)
       testClient1 ! ClientActor.CreateAccount(0, 1000, replyAccountProbe.ref)
@@ -219,9 +220,9 @@ class ClientActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike wit
     val targetAccount = AccountId()
     "succeed" in {
       val bankDao               = InMemoryBankDao
-      val replyClientProbe      = createTestProbe[ClientActor.ClientResponse]
-      val replyAccountProbe     = createTestProbe[ClientActor.AccountResponse]
-      val replyTransactionProbe = createTestProbe[ClientActor.TransactionResponse]
+      val replyClientProbe      = createTestProbe[ClientActor.ClientResponse]()
+      val replyAccountProbe     = createTestProbe[ClientActor.AccountResponse]()
+      val replyTransactionProbe = createTestProbe[ClientActor.TransactionResponse]()
       val testClient1           = spawn(ClientActor(clientId, bankDao, 100))
       testClient1 ! ClientActor.CreateClient("gigi", replyClientProbe.ref)
       testClient1 ! ClientActor.CreateAccount(0, 1000, replyAccountProbe.ref)
@@ -257,13 +258,13 @@ class ClientActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike wit
     val amount    = 100
     "succeed" in {
       val bankDao                = InMemoryBankDao
-      val replyClientProbe1      = createTestProbe[ClientActor.ClientResponse]
-      val replyAccountProbe1     = createTestProbe[ClientActor.AccountResponse]
-      val replyTransactionProbe1 = createTestProbe[ClientActor.TransactionResponse]
+      val replyClientProbe1      = createTestProbe[ClientActor.ClientResponse]()
+      val replyAccountProbe1     = createTestProbe[ClientActor.AccountResponse]()
+      val replyTransactionProbe1 = createTestProbe[ClientActor.TransactionResponse]()
 
-      val replyClientProbe2      = createTestProbe[ClientActor.ClientResponse]
-      val replyAccountProbe2     = createTestProbe[ClientActor.AccountResponse]
-      val replyTransactionProbe2 = createTestProbe[ClientActor.TransactionResponse]
+      val replyClientProbe2      = createTestProbe[ClientActor.ClientResponse]()
+      val replyAccountProbe2     = createTestProbe[ClientActor.AccountResponse]()
+      val replyTransactionProbe2 = createTestProbe[ClientActor.TransactionResponse]()
 
       val testClient1 = spawn(ClientActor(clientId1, bankDao, 100))
       testClient1 ! ClientActor.CreateClient("gigi", replyClientProbe1.ref)
